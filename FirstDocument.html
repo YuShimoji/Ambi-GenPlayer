@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自動音楽再生ツール プロジェクトダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Light & Professional -->
+    <!-- Application Structure Plan: A project dashboard structure is chosen to transform the static requirements document into an interactive experience. The app is divided into four main sections: 1. Overview: A summary of the project vision. 2. Interactive Roadmap: Visual cards for each phase (1, 2, 3) that act as filters for the feature list. 3. Feature Deep Dive: A dynamic grid of feature cards that updates based on the selected phase or category filter. 4. Technical Specs: A clear presentation of non-functional requirements. This structure allows stakeholders to easily navigate from a high-level overview to specific details, making the project plan more consumable and understandable than a linear document. -->
+    <!-- Visualization & Content Choices: Report Info -> Goal -> Viz/Presentation Method -> Interaction -> Justification. 1. Project Phases -> Show progression -> Interactive Cards (HTML/Tailwind) -> Clicking a phase card filters the feature list -> Provides a high-level entry point and interactive control. 2. Functional Requirements List -> Organize and detail all features -> Dynamic Card Grid (HTML/JS) -> Filters by phase/category -> Allows users to drill down into specific areas of interest easily. 3. Non-Functional Requirements -> Inform on technical specs -> Icon-based List (HTML/Tailwind) -> Static display -> Enhances readability and visual appeal. This approach turns a text-heavy specification into an engaging, explorable tool. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f8f9fa; /* Lighter, cleaner background */
+            color: #212529; /* Darker text for high contrast */
+        }
+        .phase-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .phase-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.07);
+        }
+        .feature-card {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            will-change: transform, opacity;
+        }
+        .filter-btn {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        .filter-btn.active {
+            background-color: #343a40; /* High-contrast active state */
+            color: #ffffff;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 sm:p-6 md:p-8 max-w-7xl">
+
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">自動音楽再生Webツール</h1>
+            <p class="mt-2 text-lg text-slate-600">インタラクティブ プロジェクトダッシュボード</p>
+        </header>
+
+        <!-- Overview Section -->
+        <section id="overview" class="mb-12 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4 border-b-2 border-slate-200 pb-2">1. プロジェクト概要</h2>
+            <p class="text-slate-700 leading-relaxed">
+                本プロジェクトは、Webページに埋め込み可能な環境音・アンビエント音楽プレイヤーを開発するものです。ノベルサイトやWebゲームなどのコンテンツと連動し、ユーザーの操作に応じて音楽の雰囲気を動的に変化させることで、これまでにない没入感を提供することを目的とします。このダッシュボードでは、その開発計画の全貌をインタラクティブに確認できます。
+            </p>
+        </section>
+
+        <!-- Interactive Roadmap Section -->
+        <section id="roadmap" class="mb-12">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">2. インタラクティブ・ロードマップ</h2>
+            <p class="text-center text-slate-600 mb-8 max-w-3xl mx-auto">開発は3つのフェーズで進行します。各フェーズをクリックすると、下の「機能詳細」セクションで該当する機能がハイライトされます。</p>
+            <div class="grid md:grid-cols-3 gap-6">
+                <!-- Phase 1 -->
+                <div id="phase-1-card" class="phase-card cursor-pointer bg-white p-6 rounded-2xl shadow-sm border border-slate-200 filter-by-phase" data-phase="1">
+                    <div class="flex items-center mb-3">
+                        <span class="bg-blue-100 text-blue-800 text-sm font-semibold mr-3 px-3 py-1 rounded-full">Phase 1</span>
+                        <h3 class="text-xl font-bold text-slate-900">MVP開発</h3>
+                    </div>
+                    <p class="text-slate-700">軽量な基本プレイヤーを開発し、複数の音源をレイヤー再生できる最小限の製品を構築します。</p>
+                </div>
+                <!-- Phase 2 -->
+                <div id="phase-2-card" class="phase-card cursor-pointer bg-white p-6 rounded-2xl shadow-sm border border-slate-200 filter-by-phase" data-phase="2">
+                    <div class="flex items-center mb-3">
+                        <span class="bg-indigo-100 text-indigo-800 text-sm font-semibold mr-3 px-3 py-1 rounded-full">Phase 2</span>
+                        <h3 class="text-xl font-bold text-slate-900">インタラクション実装</h3>
+                    </div>
+                    <p class="text-slate-700">外部イベントとの連携機能を構築。音量や音質を動的に変化させ、表現力を高めます。</p>
+                </div>
+                <!-- Phase 3 -->
+                <div id="phase-3-card" class="phase-card cursor-pointer bg-white p-6 rounded-2xl shadow-sm border border-slate-200 filter-by-phase" data-phase="3">
+                    <div class="flex items-center mb-3">
+                        <span class="bg-green-100 text-green-800 text-sm font-semibold mr-3 px-3 py-1 rounded-full">Phase 3</span>
+                        <h3 class="text-xl font-bold text-slate-900">カスタマイズ機能拡張</h3>
+                    </div>
+                    <p class="text-slate-700">ユーザーによる音源アップロードや、より高度な再生制御・保存機能を実装します。</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Feature Deep Dive Section -->
+        <section id="features" class="mb-12">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">3. 機能詳細</h2>
+             <div class="flex flex-wrap justify-center gap-2 mb-8">
+                <button class="filter-btn active px-4 py-2 text-sm rounded-full transition" data-filter="all">すべて</button>
+                <button class="filter-btn px-4 py-2 text-sm rounded-full transition" data-filter="AE">音響エンジン</button>
+                <button class="filter-btn px-4 py-2 text-sm rounded-full transition" data-filter="UI">UI</button>
+                <button class="filter-btn px-4 py-2 text-sm rounded-full transition" data-filter="ML">音楽生成ロジック</button>
+            </div>
+            <div id="feature-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Feature cards will be dynamically inserted here -->
+            </div>
+        </section>
+
+        <!-- Technical Specs Section -->
+        <section id="specs" class="mb-12 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b-2 border-slate-200 pb-2">4. 技術仕様・非機能要件</h2>
+            <div class="grid md:grid-cols-2 gap-x-8 gap-y-4">
+                <div class="flex items-start">
+                    <span class="text-xl mr-3 mt-1">⚡️</span>
+                    <div>
+                        <h4 class="font-semibold text-slate-800">パフォーマンス</h4>
+                        <p class="text-slate-700">埋め込み先のWebサイトを阻害しない、低CPU・低メモリ使用率を維持します。</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-xl mr-3 mt-1">🌐</span>
+                    <div>
+                        <h4 class="font-semibold text-slate-800">互換性</h4>
+                        <p class="text-slate-700">主要なモダンブラウザ（Chrome, Firefox, Safari, Edge）に対応します。</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-xl mr-3 mt-1">🧩</span>
+                    <div>
+                        <h4 class="font-semibold text-slate-800">埋め込み容易性</h4>
+                        <p class="text-slate-700">数行のコードをコピー＆ペーストするだけで簡単に導入できる仕組みを提供します。</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-xl mr-3 mt-1">🔧</span>
+                    <div>
+                        <h4 class="font-semibold text-slate-800">拡張性</h4>
+                        <p class="text-slate-700">将来的な機能追加を容易にするため、モジュール化されたコード構造を採用します。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center mt-12 text-slate-500">
+            <p>&copy; 2025 自動音楽再生ツール プロジェクト</p>
+        </footer>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const features = [
+        { id: 'AE-01', name: '複数音源の同時再生', description: '複数のオーディオファイルをロードし、独立したトラックとして同時に再生・ループさせます。', category: 'AE', phase: 1 },
+        { id: 'AE-02', name: 'トラック別音量制御', description: '各トラックの音量を個別に調整できます。', category: 'AE', phase: 1 },
+        { id: 'AE-03', name: 'マスター音量制御', description: '全てのトラックの音量を一括で調整できます。', category: 'AE', phase: 1 },
+        { id: 'UI-01', name: '基本再生コントロール', description: '再生/一時停止ボタンを設置します。', category: 'UI', phase: 1 },
+        { id: 'UI-02', name: 'マスタ音量スライダー', description: 'プレイヤー全体の音量を調整するスライダーを設置します。', category: 'UI', phase: 1 },
+        { id: 'UI-03', name: 'トラック別音量スライダー', description: '各音源に対応する音量スライダーを一覧表示します。', category: 'UI', phase: 1 },
+        { id: 'ML-01', name: 'タグベースの音源管理', description: '各音源ファイルに「自然」「静寂」等のタグを内部的に関連付けて管理します。', category: 'ML', phase: 1 },
+        { id: 'AE-04', name: 'スムーズな音量変化', description: '音量変更時、指定した時間をかけて滑らかに変化させます（フェードイン/アウト）。', category: 'AE', phase: 2 },
+        { id: 'AE-05', name: '再生速度の変更', description: '各トラックの再生速度をリアルタイムに変更し、音の高さも同時に変化させます。', category: 'AE', phase: 2 },
+        { id: 'ML-02', name: 'イベントトリガーによる再生制御', description: '外部JSから関数を呼び出し、特定のタグを持つ音源の再生/停止や音量変化を指示できるAPIを提供します。', category: 'ML', phase: 2 },
+        { id: 'ML-03', name: '状態の維持', description: '外部からのイベントがない限り、現在の再生状態を維持し続けます。', category: 'ML', phase: 2 },
+        { id: 'AE-06', name: 'エフェクト付与', description: 'フィルター（EQ）やリバーブ（残響）などの基本的なエフェクトを適用できます。', category: 'AE', phase: 2 },
+        { id: 'UI-04', name: 'エフェクトコントロール', description: '再生速度やフィルター等を調整するためのノブやスライダーを設置します。', category: 'UI', phase: 2 },
+        { id: 'AE-07', name: '音源の動的ロード', description: 'ユーザーが用意したオーディオファイルをアップロードし、再生リストに追加できます。', category: 'AE', phase: 3 },
+        { id: 'UI-05', name: '波形表示（オプション）', description: '再生中の音の波形や周波数スペクトラムを視覚的に表示するエリアを設けます。', category: 'UI', phase: 3 }
+    ];
+
+    const featureGrid = document.getElementById('feature-grid');
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    const phaseCards = document.querySelectorAll('.filter-by-phase');
+    let currentFilter = { type: 'all', value: 'all' };
+
+    const phaseStyles = {
+        1: { badge: 'bg-blue-100 text-blue-800', border: 'border-blue-200' },
+        2: { badge: 'bg-indigo-100 text-indigo-800', border: 'border-indigo-200' },
+        3: { badge: 'bg-green-100 text-green-800', border: 'border-green-200' }
+    };
+
+    const renderFeatures = () => {
+        featureGrid.innerHTML = '';
+        const filteredFeatures = features.filter(feature => {
+            if (currentFilter.type === 'all') return true;
+            if (currentFilter.type === 'phase') return feature.phase === currentFilter.value;
+            if (currentFilter.type === 'category') return feature.category === currentFilter.value;
+            return false;
+        });
+
+        if (filteredFeatures.length === 0) {
+            featureGrid.innerHTML = `<p class="text-slate-500 col-span-full text-center">該当する機能はありません。</p>`;
+            return;
+        }
+
+        filteredFeatures.forEach(feature => {
+            const styles = phaseStyles[feature.phase];
+            const card = document.createElement('div');
+            card.className = `feature-card bg-white p-5 rounded-xl shadow-sm border ${styles.border}`;
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <p class="text-xs font-semibold ${styles.badge} px-2.5 py-1 rounded-full">Phase ${feature.phase}</p>
+                    <span class="text-xs font-mono text-slate-400">${feature.id}</span>
+                </div>
+                <h4 class="font-bold text-slate-800 text-md mb-2">${feature.name}</h4>
+                <p class="text-sm text-slate-600">${feature.description}</p>
+            `;
+            featureGrid.appendChild(card);
+        });
+    };
+
+    const updateActiveButton = (activeButton) => {
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+    };
+    
+    const updateActivePhaseCard = (phase) => {
+        phaseCards.forEach(card => {
+            card.classList.remove('ring-2', 'ring-offset-2', 'ring-blue-500', 'ring-indigo-500', 'ring-green-500');
+            if (card.dataset.phase === phase) {
+                 const ringColor = { '1': 'ring-blue-500', '2': 'ring-indigo-500', '3': 'ring-green-500' }[phase];
+                 card.classList.add('ring-2', 'ring-offset-2', ringColor);
+            }
+        });
+    };
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const filterValue = button.dataset.filter;
+            if (filterValue === 'all') {
+                currentFilter = { type: 'all', value: 'all' };
+            } else {
+                currentFilter = { type: 'category', value: filterValue };
+            }
+            updateActiveButton(button);
+            updateActivePhaseCard(null);
+            renderFeatures();
+        });
+    });
+
+    phaseCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const phase = parseInt(card.dataset.phase);
+            currentFilter = { type: 'phase', value: phase };
+            updateActiveButton(null);
+            updateActivePhaseCard(String(phase));
+            renderFeatures();
+        });
+    });
+
+    renderFeatures();
+});
+</script>
+
+</body>
+</html>

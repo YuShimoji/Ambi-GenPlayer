@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ambi-GenPlayer | 自動音楽再生Webツール (Phase 1)</title>
+    <meta name="description" content="複数音源の同時再生と基本コントロールを備えたアンビエント向けWebオーディオプレイヤー" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:;base64,=">
+  </head>
+  <body class="bg-gray-900 text-gray-100">
+    <main class="max-w-4xl mx-auto p-6 space-y-8">
+      <header class="space-y-2">
+        <h1 class="text-2xl font-semibold">Ambi-GenPlayer</h1>
+        <p class="text-gray-400">Phase 1 (MVP): 複数トラック再生・音量制御・基本UI</p>
+      </header>
+
+      <section id="controls" class="space-y-6 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
+        <h2 class="text-lg font-medium">再生コントロール</h2>
+        <div class="flex items-center gap-3">
+          <button id="playBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded text-white">再生</button>
+          <button id="pauseBtn" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 rounded text-white">一時停止</button>
+          <button id="stopBtn" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 rounded text-white">停止</button>
+        </div>
+      </section>
+
+      <section id="master-volume" class="space-y-4 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
+        <h2 class="text-lg font-medium">マスター音量</h2>
+        <div class="flex items-center gap-4">
+          <input id="masterVolume" type="range" min="0" max="1" step="0.01" value="1" class="w-64" />
+          <output id="masterVolumeValue" class="text-sm text-gray-300">1.00</output>
+        </div>
+      </section>
+
+      <section id="dnd" class="space-y-3 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
+        <h2 class="text-lg font-medium">ドラッグ＆ドロップで音声追加</h2>
+        <div id="dropZone" class="flex items-center justify-center h-28 rounded border border-dashed border-gray-600 bg-gray-900/40 text-gray-400 select-none">
+          ここに音声ファイル（audio/*）をドロップ
+        </div>
+        <p class="text-xs text-gray-500">ドロップしたファイルはローカルでのみ再生されます。ブラウザの自動再生ポリシーにより、初回は再生ボタンのクリックが必要です。</p>
+      </section>
+
+      <section id="tracks" class="space-y-3 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
+        <h2 class="text-lg font-medium">トラック別音量</h2>
+        <div id="trackControls" class="space-y-3"></div>
+      </section>
+
+      <footer class="text-xs text-gray-500 pt-6 border-t border-gray-800">
+        <p>ブラウザの自動再生ポリシーにより、音声再生はユーザー操作後に有効になります。</p>
+      </footer>
+    </main>
+
+    <script type="module" src="./src/js/main.js"></script>
+  </body>
+</html>
