@@ -80,7 +80,7 @@ export class UIHandler {
     if (existing) return existing;
 
     const row = document.createElement('div');
-    row.className = 'flex items-center gap-3 flex-wrap';
+    row.className = 'space-y-2';
     row.dataset.trackId = trackId;
 
     const name = document.createElement('span');
@@ -111,10 +111,14 @@ export class UIHandler {
       this._trackVolumeHandlers.forEach((h) => h(trackId, value));
     });
 
-    row.appendChild(name);
-    row.appendChild(slider);
-    row.appendChild(out);
+    const controls = document.createElement('div');
+    controls.className = 'flex items-center gap-3 flex-wrap';
+    controls.appendChild(name);
+    controls.appendChild(slider);
+    controls.appendChild(out);
+
     row.appendChild(canvas);
+    row.appendChild(controls);
     this.tracksContainer.appendChild(row);
     return row;
   }

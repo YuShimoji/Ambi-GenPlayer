@@ -31,16 +31,21 @@ onReady(() => {
 
   // Wire UI events to AudioEngine methods
   ui.onPlayAll(() => {
-    audioEngine.playAll();
+    // Resume from paused positions by default
+    audioEngine.playAll({ reset: false });
     // start all renderers
     renderers.forEach((r) => r.start());
   });
   ui.onPauseAll(() => {
     audioEngine.pauseAll();
     // stop all renderers
-    renderers.forEach((r) => r.stop());
+    renderers.forEach((r) => { r.stop(); r.renderOnce && r.renderOnce(); });
   });
-  ui.onStopAll(() => audioEngine.pauseAll()); // stub: pause acts as stop for MVP skeleton
+  ui.onStopAll(() => {
+    audioEngine.stopAll();
+    // draw initial frame after reset
+    renderers.forEach((r) => { r.updateSize && r.updateSize(); r.renderOnce && r.renderOnce(); });
+  });
   ui.onMasterVolumeChange((value) => audioEngine.setMasterVolume(value));
   ui.onTrackVolumeChange((trackId, value) => audioEngine.setTrackVolume(trackId, value));
 

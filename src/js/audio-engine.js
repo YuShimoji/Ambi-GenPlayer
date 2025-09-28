@@ -19,6 +19,24 @@ export class AudioEngine {
     // We keep it as-is to avoid policy issues; UI will trigger resume on play.
   }
 
+  stopAll() {
+    // Stop and reset to beginning
+    this.tracks.forEach((track, trackId) => {
+      try {
+        if (!track) return;
+        track.pendingPlay = false;
+        if (track.media) {
+          track.media.pause();
+          track.media.currentTime = 0;
+        }
+      } catch (e) {
+        console.warn('[AudioEngine] stop failed', { trackId, e });
+      }
+    });
+    this.isPlaying = false;
+    console.log('[AudioEngine] stopAll');
+  }
+
   // Load a track via HTMLAudioElement to support file:// and http(s) without fetch for local dev.
   async loadTrack(url, trackId) {
     if (!trackId) throw new Error('trackId is required');
@@ -131,7 +149,7 @@ export class AudioEngine {
     });
   }
 
-  playAll() {
+  playAll({ reset = false } = {}) {
     // Resume AudioContext if needed
     if (this.context.state === 'suspended') {
       this.context.resume().catch((e) => console.warn('AudioContext resume failed', e));
@@ -150,7 +168,7 @@ export class AudioEngine {
         }
       }
       try {
-        track.media.currentTime = 0;
+        if (reset) track.media.currentTime = 0;
         const p = track.media.play();
         if (p && typeof p.then === 'function') startPromises.push(p);
       } catch (e) {
