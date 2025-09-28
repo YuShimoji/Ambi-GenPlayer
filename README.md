@@ -23,7 +23,8 @@ Ambi-GenPlayer/
    └─ js/
       ├─ main.js
       ├─ audio-engine.js
-      └─ ui-handler.js
+      ├─ ui-handler.js
+      └─ tag-library.js
 ```
 
 ## クイックスタート
@@ -69,12 +70,30 @@ __audioEngine.setTrackVolume('track1', 0.5);
 - 再生中にドロップした場合: 新規トラックは即時再生（現在の再生に追従）します。
 - 追加はブラウザ内の一時URL（Object URL）として扱われ、ローカル再生に利用されます。
 
+### タグベース音源管理（Issue #8）
+`TagLibrary` によって、音源をタグでグルーピングし、タグ指定で一括ロード・再生できます。サンプルトラックとDnD追加トラックは自動的にライブラリに登録されます（例: `sample`, `ambient`, `drop`）。
+
+コンソール例:
+
+```js
+// ライブラリ参照
+__library.getAll();
+__library.listTags();          // 既存タグ一覧
+
+// タグでロードして再生（AND検索）
+await __loadByTags(['ambient'], 'AND', true);
+
+// OR検索でロードのみ（自動再生なし）
+await __loadByTags(['drop', 'ambient'], 'OR', false);
+```
+
 ## 開発ガイド
 - ES Modules（`<script type="module">`）で `src/js/main.js` を読み込み、そこから各クラスをインポートします。
 - コーディング原則: SRP/DRY/KISS、YAGNI、命名規則と名前空間の明確化を遵守。
 - Linter/Formatter: 本MVPでは未導入。将来的に ESLint / Prettier / Husky を導入予定。
 
 ## 今後の拡張
+- Tone.js 採用検討と段階的移行計画: `docs/architecture/tonejs-adoption-plan.md`
 - 埋め込み向け: iframe/Widgetとしての最小バンドル提供
 - プリセット/シーン機能（時間帯やタグで自動切替）
 - フェードイン/アウト、クロスフェード

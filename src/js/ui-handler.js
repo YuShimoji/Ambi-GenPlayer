@@ -80,7 +80,7 @@ export class UIHandler {
     if (existing) return existing;
 
     const row = document.createElement('div');
-    row.className = 'flex items-center gap-3';
+    row.className = 'flex items-center gap-3 flex-wrap';
     row.dataset.trackId = trackId;
 
     const name = document.createElement('span');
@@ -99,6 +99,12 @@ export class UIHandler {
     out.className = 'text-xs text-gray-400';
     out.textContent = '1.00';
 
+    // Canvas for waveform visualization
+    const canvas = document.createElement('canvas');
+    canvas.className = 'wave bg-black/40 rounded border border-gray-700 w-full h-12 block flex-1 min-w-[240px]';
+    canvas.width = 320; // device pixels for crisp drawing (logical); actual will be set by renderer
+    canvas.height = 48;
+
     slider.addEventListener('input', () => {
       const value = Number(slider.value);
       out.textContent = value.toFixed(2);
@@ -108,6 +114,7 @@ export class UIHandler {
     row.appendChild(name);
     row.appendChild(slider);
     row.appendChild(out);
+    row.appendChild(canvas);
     this.tracksContainer.appendChild(row);
     return row;
   }

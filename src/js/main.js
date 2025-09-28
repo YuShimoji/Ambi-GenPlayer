@@ -3,6 +3,8 @@
 
 import { AudioEngine } from './audio-engine.js';
 import { UIHandler } from './ui-handler.js';
+import { TagLibrary, loadTracksByTags } from './tag-library.js';
+import { createWaveformRenderer } from './waveform-renderer.js';
 
 function onReady(cb) {
   if (document.readyState === 'loading') {
@@ -14,6 +16,8 @@ function onReady(cb) {
 
 onReady(() => {
   const audioEngine = new AudioEngine();
+  const library = new TagLibrary();
+  const renderers = new Map(); // trackId -> { start, stop }
 
   const ui = new UIHandler({
     playButton: '#playBtn',
@@ -26,11 +30,40 @@ onReady(() => {
   });
 
   // Wire UI events to AudioEngine methods
-  ui.onPlayAll(() => audioEngine.playAll());
-  ui.onPauseAll(() => audioEngine.pauseAll());
+  ui.onPlayAll(() => {
+    audioEngine.playAll();
+    // start all renderers
+    renderers.forEach((r) => r.start());
+  });
+  ui.onPauseAll(() => {
+    audioEngine.pauseAll();
+    // stop all renderers
+    renderers.forEach((r) => r.stop());
+  });
   ui.onStopAll(() => audioEngine.pauseAll()); // stub: pause acts as stop for MVP skeleton
   ui.onMasterVolumeChange((value) => audioEngine.setMasterVolume(value));
   ui.onTrackVolumeChange((trackId, value) => audioEngine.setTrackVolume(trackId, value));
+
+  function ensureRenderer(trackId) {
+    if (renderers.has(trackId)) return renderers.get(trackId);
+    const row = document.querySelector(`[data-track-id="${trackId}"]`);
+    const canvas = row?.querySelector('canvas.wave');
+    const track = audioEngine.tracks?.get(trackId);
+    const analyser = track?.analyser;
+    if (!canvas || !analyser) return null;
+    // Provide playhead as currentTime/duration (guarded)
+    const playheadProvider = () => {
+      const m = track?.media;
+      if (!m || !m.duration || !isFinite(m.duration) || m.duration <= 0) return 0;
+      return (m.currentTime % m.duration) / m.duration;
+    };
+    const renderer = createWaveformRenderer({ analyser, canvas, fps: 30, playheadProvider });
+    renderers.set(trackId, renderer);
+    // draw one frame immediately for stable initial display (no animation while paused)
+    renderer.updateSize();
+    renderer.renderOnce();
+    return renderer;
+  }
 
   // Sample tracks loader (disabled by default to avoid console errors when files are not present)
   const ENABLE_SAMPLE_TRACKS = true; // Set true after placing audio files under assets/audio/
@@ -42,8 +75,16 @@ onReady(() => {
 
     for (const t of sampleTracks) {
       try {
+        // register in library (Issue #8)
+        library.addTrack({ id: t.id, url: t.url, label: t.label, tags: ['sample', 'ambient'] });
         audioEngine.loadTrack(t.url, t.id);
         ui.ensureTrackSlider(t.id, t.label);
+        const r = ensureRenderer(t.id);
+        if (audioEngine.isPlaying) {
+          r && r.start();
+        } else {
+          r && r.renderOnce();
+        }
       } catch (err) {
         console.warn('サンプルトラックの準備に失敗しました:', t, err);
       }
@@ -67,11 +108,17 @@ onReady(() => {
       const objectUrl = URL.createObjectURL(file);
 
       try {
+        // register in library (Issue #8)
+        library.addTrack({ id: trackId, url: objectUrl, label, tags: ['drop'] });
         ui.ensureTrackSlider(trackId, label);
         await audioEngine.loadTrack(objectUrl, trackId);
+        const r = ensureRenderer(trackId);
         if (audioEngine.isPlaying) {
           // if already playing, start this new track immediately without resetting others
           await audioEngine.startTrack(trackId, { reset: false });
+          if (r) r.start();
+        } else {
+          r && r.renderOnce();
         }
       } catch (err) {
         console.warn('DnDでのトラック追加に失敗:', { file, err });
@@ -79,7 +126,19 @@ onReady(() => {
     }
   });
 
+  // Resize handling: update all renderer canvas sizes on window resize
+  window.addEventListener('resize', () => {
+    renderers.forEach((r) => {
+      if (!r) return;
+      r.updateSize && r.updateSize();
+      r.renderOnce && r.renderOnce();
+    });
+  });
+
   // Expose for console-driven testing
   window.__audioEngine = audioEngine;
   window.__ui = ui;
+  window.__library = library;
+  window.__loadByTags = (tags, mode = 'AND', autoStart = true, reset = true) =>
+    loadTracksByTags({ audioEngine, ui, library, tags, mode, autoStart, reset });
 });

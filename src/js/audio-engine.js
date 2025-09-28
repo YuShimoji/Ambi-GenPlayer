@@ -11,7 +11,7 @@ export class AudioEngine {
     this.masterGain.gain.value = 1.0;
     this.masterGain.connect(this.context.destination);
 
-    // Track registry: trackId -> { url, gainNode, media, source, isLoaded, pendingPlay }
+    // Track registry: trackId -> { url, gainNode, media, source, analyser, isLoaded, pendingPlay }
     this.tracks = new Map();
     this.isPlaying = false;
 
@@ -29,6 +29,13 @@ export class AudioEngine {
     gain.gain.value = track?.gainNode?.gain?.value ?? 1.0;
     gain.connect(this.masterGain);
 
+    // Analyser for per-track visualization
+    const analyser = this.context.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.8;
+    // Tap the track chain for visualization (no connection to destination)
+    gain.connect(analyser);
+
     const media = new Audio();
     media.crossOrigin = 'anonymous';
     media.src = url;
@@ -40,6 +47,7 @@ export class AudioEngine {
       gainNode: gain,
       media,
       source: null, // MediaElementAudioSourceNode (created once upon first play)
+      analyser,
       isLoaded: false,
       pendingPlay: false,
     };
