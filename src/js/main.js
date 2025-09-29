@@ -2,6 +2,7 @@
 // Phase 1 bootstrap: wire UI and AudioEngine with minimal, non-failing stubs.
 
 import { AudioEngine } from './audio-engine.js';
+import { createAudioEngine } from './engine-factory.js';
 import { UIHandler } from './ui-handler.js';
 import { TagLibrary, loadTracksByTags } from './tag-library.js';
 import { createWaveformRenderer } from './waveform-renderer.js';
@@ -15,8 +16,10 @@ function onReady(cb) {
   }
 }
 
-onReady(() => {
-  const audioEngine = new AudioEngine();
+onReady(async () => {
+  const params = new URLSearchParams(location.search);
+  const impl = params.get('engine') || (window.__engine || 'html');
+  const audioEngine = await createAudioEngine(impl);
   const library = new TagLibrary();
   const renderers = new Map(); // trackId -> { start, stop }
   const staticRenderers = new Map(); // trackId -> { setPeaks, setProgress, updateSize, renderOnce }
