@@ -99,7 +99,13 @@ export class UIHandler {
     out.className = 'text-xs text-gray-400';
     out.textContent = '1.00';
 
-    // Canvas for waveform visualization
+    // Canvas for static overview waveform
+    const canvasStatic = document.createElement('canvas');
+    canvasStatic.className = 'wave-static bg-black/30 rounded border border-gray-700 w-full h-10 block flex-1 min-w-[240px]';
+    canvasStatic.width = 320;
+    canvasStatic.height = 40;
+
+    // Canvas for realtime waveform visualization
     const canvas = document.createElement('canvas');
     canvas.className = 'wave bg-black/40 rounded border border-gray-700 w-full h-12 block flex-1 min-w-[240px]';
     canvas.width = 320; // device pixels for crisp drawing (logical); actual will be set by renderer
@@ -117,6 +123,7 @@ export class UIHandler {
     controls.appendChild(slider);
     controls.appendChild(out);
 
+    row.appendChild(canvasStatic);
     row.appendChild(canvas);
     row.appendChild(controls);
     this.tracksContainer.appendChild(row);
