@@ -200,6 +200,7 @@ UI上に、0.0〜1.0 の範囲で操作できるマスター音量スライダ�
   - `Tone.GrainPlayer`/`Tone.Player` を想定、`playAll({reset})/pauseAll/stopAll` 等の互換API
   - `context` ゲッターでWebAudioコンテキストを公開（静的波形との互換のため）
 - [x] エンジン切替ファクトリ（`src/js/engine-factory.js`）とクエリスイッチ（`?engine=tone`）
+- [x] クロスフェード最適化の一部実装（GrainPlayerの `overlap` と `grainSize` を相関調整、Playerの `fadeIn/Out` ベストエフォート）
 - [ ] ループ端のクロスフェード実装（Grainの `overlap` または2Player重ね再生）
 - [ ] 既存UIとの完全連動検証（DnD/タグロード/音量制御）
 
@@ -260,4 +261,4 @@ SoundCloudのように、音声ファイル全体の形状を静的に表示す�
 - [x] DnDファイルのデコード→ピーク抽出→描画を実装（`src/js/main.js`）
 - [x] URL音源は http(s)/CORS 環境でベストエフォート対応（`computePeaksFromUrl`）
 - [x] 再生/一時停止/停止/リサイズに連動（プレイヘッド更新・静止・リセット・再レイアウト）
-- [ ] 大容量最適化（段階描画/ワーカー化）は次フェーズで検討
+- [x] 大容量最適化（段階描画/ワーカー化）: Module Worker（`src/js/workers/peaks-worker.js`）にオフロードし、UI負荷軽減を実現（`file://` 時はフォールバック）

@@ -6,7 +6,7 @@ import { createAudioEngine } from './engine-factory.js';
 import { UIHandler } from './ui-handler.js';
 import { TagLibrary, loadTracksByTags } from './tag-library.js';
 import { createWaveformRenderer } from './waveform-renderer.js';
-import { createStaticWaveformRenderer, computePeaksFromFileAsync, computePeaksFromUrlAsync } from './static-waveform.js';
+import { createStaticWaveformRenderer, computePeaksFromFileWorker, computePeaksFromUrlWorker, computePeaksFromFileAsync, computePeaksFromUrlAsync } from './static-waveform.js';
 
 function onReady(cb) {
   if (document.readyState === 'loading') {
@@ -40,6 +40,23 @@ onReady(async () => {
     crossfadeMsValue: '#crossfadeMsValue',
   });
 
+  function applyPersistedSettings() {
+    try {
+      const wf = localStorage.getItem('waveformMode');
+      if (wf != null && ui.waveformToggle) {
+        ui.waveformToggle.checked = wf === '1';
+        const evCh = new Event('change');
+        ui.waveformToggle.dispatchEvent(evCh);
+      }
+      const xf = localStorage.getItem('crossfadeMs');
+      if (xf != null && ui.crossfadeSlider) {
+        ui.crossfadeSlider.value = String(Math.max(0, Number(xf) || 0));
+        const ev = new Event('input');
+        ui.crossfadeSlider.dispatchEvent(ev);
+      }
+    } catch {}
+  }
+
   // Wire UI events to AudioEngine methods
   ui.onPlayAll(() => {
     // Resume from paused positions by default
@@ -69,6 +86,7 @@ onReady(async () => {
   });
   ui.onWaveformModeChange((on) => {
     isStaticMode = !!on;
+    try { localStorage.setItem('waveformMode', on ? '1' : '0'); } catch {}
     updateWaveModeViews();
     if (audioEngine.isPlaying) {
       if (isStaticMode) {
@@ -90,12 +108,16 @@ onReady(async () => {
 
   ui.onCrossfadeChange((ms) => {
     const s = Math.max(0, Number(ms) || 0) / 1000;
+    try { localStorage.setItem('crossfadeMs', String(Math.max(0, Number(ms) || 0))); } catch {}
     if (typeof audioEngine.setLoopCrossfade === 'function') {
       try { audioEngine.setLoopCrossfade(s); } catch {}
     }
   });
   ui.onMasterVolumeChange((value) => audioEngine.setMasterVolume(value));
   ui.onTrackVolumeChange((trackId, value) => audioEngine.setTrackVolume(trackId, value));
+
+  // restore persisted UI after handlers are ready
+  applyPersistedSettings();
 
   function ensureRenderer(trackId) {
     if (renderers.has(trackId)) return renderers.get(trackId);
@@ -192,11 +214,21 @@ onReady(async () => {
         try {
           const isHttp = typeof location !== 'undefined' && /^https?:/i.test(location.protocol);
           if (isHttp) {
-            computePeaksFromUrlAsync(t.url, audioEngine.context, 1024, {
+            const useWorker = typeof Worker !== 'undefined' && isHttp;
+            const compute = useWorker ? computePeaksFromUrlWorker : computePeaksFromUrlAsync;
+            compute(t.url, audioEngine.context, 1024, {
               onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
             }).then((peaks) => {
               if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(null); sr.setPeaks(peaks); sr.renderOnce(); }
-            }).catch(() => { sr && sr.setLoadingProgress && sr.setLoadingProgress(null); });
+            }).catch(async () => {
+              // Fallback from worker to async if it failed
+              try {
+                const peaks = await computePeaksFromUrlAsync(t.url, audioEngine.context, 1024, {
+                  onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
+                });
+                if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(null); sr.setPeaks(peaks); sr.renderOnce(); }
+              } catch {}
+            });
           }
         } catch {}
         if (audioEngine.isPlaying) {
@@ -239,9 +271,23 @@ onReady(async () => {
         // compute static peaks from the dropped file (async with progress)
         try {
           if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(0); sr.renderOnce && sr.renderOnce(); }
-          const peaks = await computePeaksFromFileAsync(file, audioEngine.context, 1024, {
-            onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
-          });
+          const useWorker = typeof Worker !== 'undefined' && (typeof location !== 'undefined' && /^https?:/i.test(location.protocol));
+          let peaks;
+          if (useWorker) {
+            try {
+              peaks = await computePeaksFromFileWorker(file, audioEngine.context, 1024, {
+                onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
+              });
+            } catch {
+              peaks = await computePeaksFromFileAsync(file, audioEngine.context, 1024, {
+                onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
+              });
+            }
+          } else {
+            peaks = await computePeaksFromFileAsync(file, audioEngine.context, 1024, {
+              onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
+            });
+          }
           if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(null); sr.setPeaks(peaks); sr.renderOnce(); }
         } catch (e) {
           console.warn('静的波形の生成に失敗:', e);

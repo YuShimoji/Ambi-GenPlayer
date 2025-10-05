@@ -8,6 +8,59 @@ export async function computePeaksFromFile(file, audioContext, bins = 1024) {
   return computePeaksFromAudioBuffer(audioBuffer, bins);
 }
 
+// Worker-based computation (module worker). Copies channel data and transfers to worker.
+async function computePeaksFromAudioBufferWorker(audioBuffer, bins = 1024, { samplesPerBatch = 200_000, onProgress = null } = {}) {
+  if (typeof Worker === 'undefined') throw new Error('Worker unsupported');
+  const workerUrl = new URL('./workers/peaks-worker.js', import.meta.url);
+  const worker = new Worker(workerUrl, { type: 'module' });
+  const ch0 = audioBuffer.getChannelData(0);
+  const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+  // Copy to transferable buffers
+  const c0 = new Float32Array(ch0).buffer;
+  const c1 = ch1 ? new Float32Array(ch1).buffer : null;
+
+  return new Promise((resolve, reject) => {
+    const onMsg = (e) => {
+      const msg = e.data || {};
+      if (msg.type === 'progress') {
+        try { onProgress && onProgress(msg.value); } catch {}
+      } else if (msg.type === 'done') {
+        worker.terminate();
+        const mins = new Float32Array(msg.mins);
+        const maxs = new Float32Array(msg.maxs);
+        const n = msg.nBins >>> 0;
+        const peaks = new Array(n);
+        for (let i = 0; i < n; i++) peaks[i] = { min: mins[i], max: maxs[i] };
+        resolve(peaks);
+      } else if (msg.type === 'error') {
+        worker.terminate();
+        reject(new Error(msg.message || 'worker error'));
+      }
+    };
+    const onErr = (err) => { worker.terminate(); reject(err); };
+    worker.onmessage = onMsg;
+    worker.onerror = onErr;
+    const transfers = c1 ? [c0, c1] : [c0];
+    worker.postMessage({ type: 'compute', ch0: c0, ch1: c1, total: ch0.length, bins, samplesPerBatch }, transfers);
+  });
+}
+
+export async function computePeaksFromFileWorker(file, audioContext, bins = 1024, opts = {}) {
+  const buf = await file.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(buf.slice(0));
+  return computePeaksFromAudioBufferWorker(audioBuffer, bins, opts);
+}
+
+export async function computePeaksFromUrlWorker(url, audioContext, bins = 1024, opts = {}) {
+  const proto = (typeof location !== 'undefined' && location.protocol) ? location.protocol : '';
+  if (!/^https?:/i.test(proto)) throw new Error('fetch not available for non-http(s) context');
+  const res = await fetch(url, { mode: 'cors' });
+  if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+  const buf = await res.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(buf);
+  return computePeaksFromAudioBufferWorker(audioBuffer, bins, opts);
+}
+
 export async function computePeaksFromUrl(url, audioContext, bins = 1024) {
   if (!url || !audioContext) throw new Error('url and audioContext are required');
   const proto = (typeof location !== 'undefined' && location.protocol) ? location.protocol : '';

@@ -56,7 +56,9 @@ export class ToneAudioEngine {
 
     let player;
     if (this.useGrain && Tone.GrainPlayer) {
-      player = new Tone.GrainPlayer({ url, loop: true, overlap: this.loopCrossfade }).connect(gain);
+      // grainSizeはoverlapの倍程度を初期値に（フェーズの自然さ優先）
+      const grainSize = Math.max(0.02, this.loopCrossfade * 2);
+      player = new Tone.GrainPlayer({ url, loop: true, overlap: this.loopCrossfade, grainSize }).connect(gain);
     } else {
       player = new Tone.Player({ url, loop: true }).connect(gain);
       // Not true loop xfade, but keep fadeIn/Out small to soften edges
@@ -145,7 +147,13 @@ export class ToneAudioEngine {
     this.tracks.forEach((t) => {
       const p = t?.player; if (!p) return;
       try {
-        if (p.overlap !== undefined) p.overlap = s; // GrainPlayer
+        if (p.overlap !== undefined) {
+          p.overlap = s; // GrainPlayer
+          if (p.grainSize !== undefined) {
+            // 粒長はオーバーラップの約2倍を目安にし、下限は20ms
+            p.grainSize = Math.max(0.02, s * 2);
+          }
+        }
         if (typeof p.fadeIn === 'number') p.fadeIn = s; // Player (best-effort)
         if (typeof p.fadeOut === 'number') p.fadeOut = s;
       } catch {}

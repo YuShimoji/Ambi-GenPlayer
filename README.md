@@ -99,6 +99,7 @@ await __loadByTags(['drop', 'ambient'], 'OR', false);
 
 #### 大容量対応
 静的波形のピーク計算は分割バッチで非同期に処理し、進捗バーを表示します（UI応答性を維持）。
+HTTP(S) で配信されている場合は Module Worker（`src/js/workers/peaks-worker.js`）にオフロードして更にUI負荷を低減します（`file://` 配信時はフォールバック）。
 
 ## 開発ガイド
 - ES Modules（`<script type="module">`）で `src/js/main.js` を読み込み、そこから各クラスをインポートします。
@@ -113,6 +114,11 @@ await __loadByTags(['drop', 'ambient'], 'OR', false);
 
 #### クロスフェード量（Issue #11）
 `エンジン/表示設定` の「クロスフェード（ms）」スライダーで、ループ端のクロスフェード時間を調整できます（Toneエンジン時に有効）。
+
+### 設定の保存
+以下の設定は LocalStorage に保存され、次回アクセス時に自動復元されます。
+- 静的波形モードのON/OFF（`waveformMode`）
+- クロスフェード時間（ms）（`crossfadeMs`）
 
 ## 今後の拡張
 - Tone.js 採用検討と段階的移行計画: `docs/architecture/tonejs-adoption-plan.md`
