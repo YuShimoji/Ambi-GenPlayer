@@ -10,6 +10,10 @@ export class UIHandler {
     this.masterValue = this._resolve(selectorsOrElements.masterVolumeValue);
     this.tracksContainer = this._resolve(selectorsOrElements.trackControlsContainer);
     this.dropZone = this._resolve(selectorsOrElements.dropZone);
+    // New controls
+    this.waveformToggle = this._resolve(selectorsOrElements.waveformModeToggle);
+    this.crossfadeSlider = this._resolve(selectorsOrElements.crossfadeMsSlider);
+    this.crossfadeValue = this._resolve(selectorsOrElements.crossfadeMsValue);
 
     this._playHandlers = [];
     this._pauseHandlers = [];
@@ -17,6 +21,8 @@ export class UIHandler {
     this._masterVolumeHandlers = [];
     this._trackVolumeHandlers = [];
     this._dropHandlers = [];
+    this._waveformModeHandlers = [];
+    this._crossfadeHandlers = [];
 
     this._bindBaseEvents();
     this._bindDropEvents();
@@ -41,6 +47,25 @@ export class UIHandler {
       };
       this.masterSlider.addEventListener('input', update);
       update(); // init display
+    }
+
+    if (this.waveformToggle) {
+      const updateWaveMode = () => {
+        const on = !!this.waveformToggle.checked;
+        this._waveformModeHandlers.forEach((h) => h(on));
+      };
+      this.waveformToggle.addEventListener('change', updateWaveMode);
+      updateWaveMode();
+    }
+
+    if (this.crossfadeSlider) {
+      const updateXf = () => {
+        const ms = Number(this.crossfadeSlider.value);
+        if (this.crossfadeValue) this.crossfadeValue.textContent = String(ms);
+        this._crossfadeHandlers.forEach((h) => h(ms));
+      };
+      this.crossfadeSlider.addEventListener('input', updateXf);
+      updateXf();
     }
   }
 
@@ -73,6 +98,8 @@ export class UIHandler {
   onMasterVolumeChange(handler) { this._masterVolumeHandlers.push(handler); }
   onTrackVolumeChange(handler) { this._trackVolumeHandlers.push(handler); }
   onFilesDropped(handler) { this._dropHandlers.push(handler); }
+  onWaveformModeChange(handler) { this._waveformModeHandlers.push(handler); }
+  onCrossfadeChange(handler) { this._crossfadeHandlers.push(handler); }
 
   ensureTrackSlider(trackId, label = trackId) {
     if (!this.tracksContainer || !trackId) return;

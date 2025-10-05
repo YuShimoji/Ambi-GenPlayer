@@ -22,16 +22,28 @@ export class ToneAudioEngine {
     this.isPlaying = false;
   }
 
+  get context() {
+    // Expose underlying WebAudio context for utilities that expect it (e.g., decode for static peaks)
+    if (!this._Tone) return null;
+    try {
+      const { Tone } = this._Tone;
+      const ctx = Tone?.getContext?.().rawContext || Tone?.context?._context || null;
+      return ctx || null;
+    } catch {
+      return null;
+    }
+  }
+
   async _loadTone() {
     if (this._Tone) return this._Tone;
     // Prefer esm.sh for ESM import
     const mod = await import('https://esm.sh/tone@14.8.49');
-    this._Tone = mod;
-    const { Tone } = mod;
+    const Tone = mod.Tone || mod.default || mod;
+    this._Tone = { Tone };
     // Master
     this.masterGain = new Tone.Gain(1);
     this.masterGain.connect(Tone.Destination);
-    return mod;
+    return this._Tone;
   }
 
   async loadTrack(url, trackId) {
@@ -56,6 +68,14 @@ export class ToneAudioEngine {
     this.tracks.set(trackId, t);
 
     await player.load();
+    // Initialize loop region to full duration after load
+    try {
+      const dur = player.buffer?.duration || null;
+      if (dur && isFinite(dur) && dur > 0) {
+        if (player.loopStart !== undefined) player.loopStart = 0;
+        if (player.loopEnd !== undefined) player.loopEnd = dur;
+      }
+    } catch {}
     t.isLoaded = true;
     return { trackId, url };
   }
@@ -117,5 +137,37 @@ export class ToneAudioEngine {
   setMasterVolume(value) {
     const v = Math.max(0, Math.min(1, Number(value)));
     if (this.masterGain) this.masterGain.gain.value = v;
+  }
+
+  setLoopCrossfade(seconds = 0.05) {
+    const s = Math.max(0, Number(seconds) || 0);
+    this.loopCrossfade = s;
+    this.tracks.forEach((t) => {
+      const p = t?.player; if (!p) return;
+      try {
+        if (p.overlap !== undefined) p.overlap = s; // GrainPlayer
+        if (typeof p.fadeIn === 'number') p.fadeIn = s; // Player (best-effort)
+        if (typeof p.fadeOut === 'number') p.fadeOut = s;
+      } catch {}
+    });
+  }
+
+  setLoopRegion(trackId, start = 0, end = null) {
+    const t = this.tracks.get(trackId);
+    const p = t?.player; if (!p) return;
+    try {
+      const dur = p.buffer?.duration || 0;
+      const s = Math.max(0, Math.min(Number(start) || 0, dur));
+      const e = Math.max(s, Math.min(end == null ? dur : Number(end), dur));
+      if (p.loopStart !== undefined) p.loopStart = s;
+      if (p.loopEnd !== undefined) p.loopEnd = e;
+      p.loop = true;
+    } catch {}
+  }
+
+  getTrackProgress(trackId) {
+    // Progress reporting for Tone Player is non-trivial without private fields; return 0 for now.
+    // Future: maintain our own clock on start/stop and mod by loopEnd-start.
+    return 0;
   }
 }

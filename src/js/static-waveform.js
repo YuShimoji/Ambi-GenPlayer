@@ -19,6 +19,24 @@ export async function computePeaksFromUrl(url, audioContext, bins = 1024) {
   return computePeaksFromAudioBuffer(audioBuffer, bins);
 }
 
+export async function computePeaksFromFileAsync(file, audioContext, bins = 1024, opts = {}) {
+  if (!file || !audioContext) throw new Error('file and audioContext are required');
+  const buf = await file.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(buf.slice(0));
+  return computePeaksFromAudioBufferAsync(audioBuffer, bins, opts);
+}
+
+export async function computePeaksFromUrlAsync(url, audioContext, bins = 1024, opts = {}) {
+  if (!url || !audioContext) throw new Error('url and audioContext are required');
+  const proto = (typeof location !== 'undefined' && location.protocol) ? location.protocol : '';
+  if (!/^https?:/i.test(proto)) throw new Error('fetch not available for non-http(s) context');
+  const res = await fetch(url, { mode: 'cors' });
+  if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+  const buf = await res.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(buf);
+  return computePeaksFromAudioBufferAsync(audioBuffer, bins, opts);
+}
+
 export function computePeaksFromAudioBuffer(audioBuffer, bins = 1024) {
   const ch0 = audioBuffer.getChannelData(0);
   const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
@@ -41,11 +59,46 @@ export function computePeaksFromAudioBuffer(audioBuffer, bins = 1024) {
   return peaks;
 }
 
+// Async/batched peaks computation to keep UI responsive on large buffers
+export async function computePeaksFromAudioBufferAsync(audioBuffer, bins = 1024, { samplesPerBatch = 200_000, onProgress = null } = {}) {
+  const ch0 = audioBuffer.getChannelData(0);
+  const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+  const total = ch0.length;
+  const step = Math.max(1, Math.floor(total / bins));
+  const nBins = Math.ceil(total / step);
+  const mins = new Float32Array(nBins).fill(1.0);
+  const maxs = new Float32Array(nBins).fill(-1.0);
+
+  let processed = 0;
+  while (processed < total) {
+    const endSamp = Math.min(total, processed + samplesPerBatch);
+    for (let j = processed; j < endSamp; j++) {
+      const a = ch0[j];
+      const b = ch1 ? ch1[j] : a;
+      const v = (a + b) * 0.5;
+      const bi = Math.min(nBins - 1, Math.floor(j / step));
+      if (v < mins[bi]) mins[bi] = v;
+      if (v > maxs[bi]) maxs[bi] = v;
+    }
+    processed = endSamp;
+    if (typeof onProgress === 'function') {
+      try { onProgress(processed / total); } catch {}
+    }
+    // Yield to event loop
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  const peaks = new Array(nBins);
+  for (let i = 0; i < nBins; i++) peaks[i] = { min: mins[i], max: maxs[i] };
+  return peaks;
+}
+
 export function createStaticWaveformRenderer({ canvas, peaks = null }) {
   if (!canvas) throw new Error('canvas is required');
   const ctx = canvas.getContext('2d');
   let _peaks = peaks;
   let _progress = 0; // 0..1
+  let _loadingProgress = null; // 0..1 when computing peaks
 
   function updateSize() {
     const dpr = window.devicePixelRatio || 1;
@@ -83,10 +136,16 @@ export function createStaticWaveformRenderer({ canvas, peaks = null }) {
         x += barW;
       }
     } else {
-      // placeholder
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      // placeholder with (optional) progress bar
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.font = '12px sans-serif';
-      ctx.fillText('Static overview not available', 8, Math.max(14, height / 2));
+      ctx.fillText('ピーク解析中...', 8, Math.max(14, height / 2 - 8));
+      if (_loadingProgress != null) {
+        const pad = 8;
+        const pw = Math.max(0, Math.min(1, _loadingProgress)) * (width - pad * 2);
+        ctx.fillStyle = 'rgba(16,185,129,0.6)';
+        ctx.fillRect(pad, height - 10, pw, 6);
+      }
     }
 
     // playhead
@@ -104,6 +163,7 @@ export function createStaticWaveformRenderer({ canvas, peaks = null }) {
 
   function setPeaks(peaks) { _peaks = peaks || null; }
   function setProgress(p) { _progress = Math.max(0, Math.min(1, Number(p) || 0)); }
+  function setLoadingProgress(p) { _loadingProgress = p == null ? null : Math.max(0, Math.min(1, Number(p) || 0)); }
 
-  return { setPeaks, setProgress, updateSize, renderOnce };
+  return { setPeaks, setProgress, setLoadingProgress, updateSize, renderOnce };
 }

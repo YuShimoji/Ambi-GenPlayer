@@ -6,7 +6,7 @@ import { createAudioEngine } from './engine-factory.js';
 import { UIHandler } from './ui-handler.js';
 import { TagLibrary, loadTracksByTags } from './tag-library.js';
 import { createWaveformRenderer } from './waveform-renderer.js';
-import { createStaticWaveformRenderer, computePeaksFromFile, computePeaksFromUrl } from './static-waveform.js';
+import { createStaticWaveformRenderer, computePeaksFromFileAsync, computePeaksFromUrlAsync } from './static-waveform.js';
 
 function onReady(cb) {
   if (document.readyState === 'loading') {
@@ -22,9 +22,10 @@ onReady(async () => {
   const audioEngine = await createAudioEngine(impl);
   const library = new TagLibrary();
   const renderers = new Map(); // trackId -> { start, stop }
-  const staticRenderers = new Map(); // trackId -> { setPeaks, setProgress, updateSize, renderOnce }
+  const staticRenderers = new Map(); // trackId -> { setPeaks, setProgress, setLoadingProgress, updateSize, renderOnce }
   let staticTickerId = 0;
   let lastStaticTick = 0;
+  let isStaticMode = false;
 
   const ui = new UIHandler({
     playButton: '#playBtn',
@@ -34,6 +35,9 @@ onReady(async () => {
     masterVolumeValue: '#masterVolumeValue',
     trackControlsContainer: '#trackControls',
     dropZone: '#dropZone',
+    waveformModeToggle: '#waveformMode',
+    crossfadeMsSlider: '#crossfadeMs',
+    crossfadeMsValue: '#crossfadeMsValue',
   });
 
   // Wire UI events to AudioEngine methods
@@ -41,8 +45,13 @@ onReady(async () => {
     // Resume from paused positions by default
     audioEngine.playAll({ reset: false });
     // start all renderers
-    renderers.forEach((r) => r.start());
-    startStaticTicker();
+    if (isStaticMode) {
+      renderers.forEach((r) => r.stop());
+      startStaticTicker();
+    } else {
+      renderers.forEach((r) => r.start());
+      stopStaticTicker(false);
+    }
   });
   ui.onPauseAll(() => {
     audioEngine.pauseAll();
@@ -57,6 +66,33 @@ onReady(async () => {
     // reset static overview playhead to 0
     staticRenderers.forEach((sr) => { sr.updateSize && sr.updateSize(); sr.setProgress && sr.setProgress(0); sr.renderOnce && sr.renderOnce(); });
     stopStaticTicker(false);
+  });
+  ui.onWaveformModeChange((on) => {
+    isStaticMode = !!on;
+    updateWaveModeViews();
+    if (audioEngine.isPlaying) {
+      if (isStaticMode) {
+        renderers.forEach((r) => r.stop());
+        startStaticTicker();
+      } else {
+        stopStaticTicker(false);
+        renderers.forEach((r) => r.start());
+      }
+    } else {
+      // paused or stopped: render single frame of the active mode
+      if (isStaticMode) {
+        staticRenderers.forEach((sr) => sr.renderOnce && sr.renderOnce());
+      } else {
+        renderers.forEach((r) => r.renderOnce && r.renderOnce());
+      }
+    }
+  });
+
+  ui.onCrossfadeChange((ms) => {
+    const s = Math.max(0, Number(ms) || 0) / 1000;
+    if (typeof audioEngine.setLoopCrossfade === 'function') {
+      try { audioEngine.setLoopCrossfade(s); } catch {}
+    }
   });
   ui.onMasterVolumeChange((value) => audioEngine.setMasterVolume(value));
   ui.onTrackVolumeChange((trackId, value) => audioEngine.setTrackVolume(trackId, value));
@@ -92,6 +128,18 @@ onReady(async () => {
     sr.updateSize();
     sr.renderOnce();
     return sr;
+  }
+
+  function updateWaveModeViews() {
+    // Toggle visibility per row
+    staticRenderers.forEach((_, trackId) => {
+      const row = document.querySelector(`[data-track-id="${trackId}"]`);
+      if (!row) return;
+      const cvsStatic = row.querySelector('canvas.wave-static');
+      const cvsDyn = row.querySelector('canvas.wave');
+      if (cvsStatic) cvsStatic.style.display = isStaticMode ? 'block' : 'none';
+      if (cvsDyn) cvsDyn.style.display = isStaticMode ? 'none' : 'block';
+    });
   }
 
   function updateStaticProgressAll() {
@@ -144,18 +192,21 @@ onReady(async () => {
         try {
           const isHttp = typeof location !== 'undefined' && /^https?:/i.test(location.protocol);
           if (isHttp) {
-            computePeaksFromUrl(t.url, audioEngine.context, 1024).then((peaks) => {
-              if (sr) { sr.setPeaks(peaks); sr.renderOnce(); }
-            }).catch(() => {});
+            computePeaksFromUrlAsync(t.url, audioEngine.context, 1024, {
+              onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
+            }).then((peaks) => {
+              if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(null); sr.setPeaks(peaks); sr.renderOnce(); }
+            }).catch(() => { sr && sr.setLoadingProgress && sr.setLoadingProgress(null); });
           }
         } catch {}
         if (audioEngine.isPlaying) {
           r && r.start();
-          startStaticTicker();
+          if (isStaticMode) startStaticTicker();
         } else {
           r && r.renderOnce();
           sr && sr.renderOnce();
         }
+        updateWaveModeViews();
       } catch (err) {
         console.warn('サンプルトラックの準備に失敗しました:', t, err);
       }
@@ -185,22 +236,26 @@ onReady(async () => {
         await audioEngine.loadTrack(objectUrl, trackId);
         const r = ensureRenderer(trackId);
         const sr = ensureStaticRenderer(trackId);
-        // compute static peaks from the dropped file
+        // compute static peaks from the dropped file (async with progress)
         try {
-          const peaks = await computePeaksFromFile(file, audioEngine.context, 1024);
-          if (sr) { sr.setPeaks(peaks); sr.renderOnce(); }
+          if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(0); sr.renderOnce && sr.renderOnce(); }
+          const peaks = await computePeaksFromFileAsync(file, audioEngine.context, 1024, {
+            onProgress: (p) => { sr && sr.setLoadingProgress && sr.setLoadingProgress(p); sr && sr.renderOnce && sr.renderOnce(); },
+          });
+          if (sr) { sr.setLoadingProgress && sr.setLoadingProgress(null); sr.setPeaks(peaks); sr.renderOnce(); }
         } catch (e) {
           console.warn('静的波形の生成に失敗:', e);
         }
         if (audioEngine.isPlaying) {
           // if already playing, start this new track immediately without resetting others
           await audioEngine.startTrack(trackId, { reset: false });
-          if (r) r.start();
-          startStaticTicker();
+          if (!isStaticMode && r) r.start();
+          if (isStaticMode) startStaticTicker();
         } else {
           r && r.renderOnce();
           sr && sr.renderOnce();
         }
+        updateWaveModeViews();
       } catch (err) {
         console.warn('DnDでのトラック追加に失敗:', { file, err });
       }
