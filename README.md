@@ -115,6 +115,8 @@ HTTP(S) で配信されている場合は Module Worker（`src/js/workers/peaks-
 #### クロスフェード量（Issue #11）
 `エンジン/表示設定` の「クロスフェード（ms）」スライダーで、ループ端のクロスフェード時間を調整できます（Toneエンジン時に有効）。
 
+補足: `Tone.GrainPlayer` が利用できない環境では、`Tone.Player` を2基交互にスケジュールしてクロスフェードを実現します（2Player重ね方式）。
+
 ### 設定の保存
 以下の設定は LocalStorage に保存され、次回アクセス時に自動復元されます。
 - 静的波形モードのON/OFF（`waveformMode`）
