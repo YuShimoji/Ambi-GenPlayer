@@ -78,11 +78,11 @@ export class ToneAudioEngine {
     const pB = new Tone.Player({ loop: false }).connect(gain);
     // Share buffer to avoid second fetch
     pB.buffer = pA.buffer;
-    // Initialize fades
-    if (typeof pA.fadeIn === 'number') pA.fadeIn = this.loopCrossfade;
-    if (typeof pA.fadeOut === 'number') pA.fadeOut = this.loopCrossfade;
-    if (typeof pB.fadeIn === 'number') pB.fadeIn = this.loopCrossfade;
-    if (typeof pB.fadeOut === 'number') pB.fadeOut = this.loopCrossfade;
+    // Initialize fades (Tone.Player accepts seconds)
+    pA.fadeIn = this.loopCrossfade;
+    pA.fadeOut = this.loopCrossfade;
+    pB.fadeIn = this.loopCrossfade;
+    pB.fadeOut = this.loopCrossfade;
 
     let loopStart = 0;
     let loopEnd = pA.buffer?.duration || 0;
@@ -166,6 +166,7 @@ export class ToneAudioEngine {
   setLoopCrossfade(seconds = 0.05) {
     const s = Math.max(0, Number(seconds) || 0);
     this.loopCrossfade = s;
+    console.log('[ToneAudioEngine] setLoopCrossfade', { seconds: s });
     this.tracks.forEach((t) => {
       try {
         if (t.mode === 'grain') {
@@ -181,8 +182,12 @@ export class ToneAudioEngine {
           if (typeof p.fadeOut === 'number') p.fadeOut = s;
         } else if (t.mode === 'dual') {
           const a = t.players?.a; const b = t.players?.b;
-          if (a) { if (typeof a.fadeIn === 'number') a.fadeIn = s; if (typeof a.fadeOut === 'number') a.fadeOut = s; }
-          if (b) { if (typeof b.fadeIn === 'number') b.fadeIn = s; if (typeof b.fadeOut === 'number') b.fadeOut = s; }
+          if (a) { a.fadeIn = s; a.fadeOut = s; }
+          if (b) { b.fadeIn = s; b.fadeOut = s; }
+          if (this.isPlaying) {
+            // reschedule with new crossfade
+            this._dualStart(t, { reset: false });
+          }
         }
       } catch {}
     });
@@ -191,6 +196,7 @@ export class ToneAudioEngine {
   setLoopRegion(trackId, start = 0, end = null) {
     const t = this.tracks.get(trackId);
     if (!t) return;
+    console.log('[ToneAudioEngine] setLoopRegion', { trackId, start, end });
     try {
       if (t.mode === 'grain') {
         const p = t.player; if (!p) return;
@@ -206,6 +212,7 @@ export class ToneAudioEngine {
         const e = Math.max(s, Math.min(end == null ? dur : Number(end), dur));
         t.loopStart = s; t.loopEnd = e;
         // will apply on next scheduling cycle
+        if (this.isPlaying) this._dualStart(t, { reset: false });
       }
     } catch {}
   }
@@ -243,23 +250,23 @@ ToneAudioEngine.prototype._dualStart = function(t, { reset = true } = {}) {
   const base = Tone.now() + 0.05;
   // initial events
   try {
-    a.start(base, start, loopDur); a.stop(base + loopDur);
+    a.start(base, start); a.stop(base + loopDur);
     const bStart = base + (loopDur - cross);
-    b.start(bStart, start, loopDur); b.stop(bStart + loopDur);
+    b.start(bStart, start); b.stop(bStart + loopDur);
   } catch {}
 
   // schedule subsequent events with independent timers
   const scheduleA = (at) => {
     const delayMs = Math.max(0, (at - Tone.now() - 0.01) * 1000);
     t.scheduler.a = setTimeout(() => {
-      try { a.start(at, start, loopDur); a.stop(at + loopDur); } catch {}
+      try { a.start(at, start); a.stop(at + loopDur); } catch {}
       scheduleA(at + period);
     }, delayMs);
   };
   const scheduleB = (at) => {
     const delayMs = Math.max(0, (at - Tone.now() - 0.01) * 1000);
     t.scheduler.b = setTimeout(() => {
-      try { b.start(at, start, loopDur); b.stop(at + loopDur); } catch {}
+      try { b.start(at, start); b.stop(at + loopDur); } catch {}
       scheduleB(at + period);
     }, delayMs);
   };

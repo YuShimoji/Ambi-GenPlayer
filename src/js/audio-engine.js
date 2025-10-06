@@ -230,4 +230,21 @@ export class AudioEngine {
     this.masterGain.gain.value = isFinite(v) ? v : 0;
     console.log('[AudioEngine] setMasterVolume', { volume: this.masterGain.gain.value });
   }
+
+  getTrackProgress(trackId) {
+    const t = this.tracks.get(trackId);
+    const m = t?.media;
+    if (!m || !m.duration || !isFinite(m.duration) || m.duration <= 0) return 0;
+    return (m.currentTime % m.duration) / m.duration;
+  }
+
+  // Stubs for API parity with Tone engine (no-op but callable from console)
+  setLoopRegion(trackId, start = 0, end = null) {
+    console.log('[AudioEngine] setLoopRegion (HTML engine stub; no-op)', { trackId, start, end });
+  }
+
+  setLoopCrossfade(seconds = 0.05) {
+    const s = Math.max(0, Number(seconds) || 0);
+    console.log('[AudioEngine] setLoopCrossfade (HTML engine stub; no-op)', { seconds: s });
+  }
 }

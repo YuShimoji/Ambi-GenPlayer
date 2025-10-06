@@ -109,6 +109,7 @@ onReady(async () => {
   ui.onCrossfadeChange((ms) => {
     const s = Math.max(0, Number(ms) || 0) / 1000;
     try { localStorage.setItem('crossfadeMs', String(Math.max(0, Number(ms) || 0))); } catch {}
+    console.log('[UI] crossfade changed', { ms: Math.max(0, Number(ms) || 0), seconds: s });
     if (typeof audioEngine.setLoopCrossfade === 'function') {
       try { audioEngine.setLoopCrossfade(s); } catch {}
     }
