@@ -178,12 +178,14 @@ onReady(async () => {
 
   function startStaticTicker() {
     if (staticTickerId) return;
+    lastStaticTick = 0;
     const tick = (ts) => {
-      if (!audioEngine.isPlaying) { staticTickerId = 0; return; }
-      if (!lastStaticTick || ts - lastStaticTick > 100) { // ~10fps for static
+      const isPlaying = !!audioEngine.isPlaying;
+      if (isPlaying && (!lastStaticTick || ts - lastStaticTick > 100)) { // ~10fps for static
         updateStaticProgressAll();
         lastStaticTick = ts;
       }
+      if (!staticTickerId) return; // ticker was stopped during this frame
       staticTickerId = requestAnimationFrame(tick);
     };
     staticTickerId = requestAnimationFrame(tick);
@@ -192,6 +194,7 @@ onReady(async () => {
   function stopStaticTicker(freeze = true) {
     if (staticTickerId) cancelAnimationFrame(staticTickerId);
     staticTickerId = 0;
+    lastStaticTick = 0;
     if (freeze) updateStaticProgressAll();
   }
 
