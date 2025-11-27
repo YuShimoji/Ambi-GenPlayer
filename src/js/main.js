@@ -57,10 +57,19 @@ onReady(async () => {
     } catch {}
   }
 
+  // App container for play state styling
+  const appContainer = document.getElementById('app');
+  function setPlayingState(playing) {
+    if (appContainer) {
+      appContainer.classList.toggle('is-playing', playing);
+    }
+  }
+
   // Wire UI events to AudioEngine methods
   ui.onPlayAll(() => {
     // Resume from paused positions by default
     audioEngine.playAll({ reset: false });
+    setPlayingState(true);
     // start all renderers
     if (isStaticMode) {
       renderers.forEach((r) => r.stop());
@@ -72,12 +81,14 @@ onReady(async () => {
   });
   ui.onPauseAll(() => {
     audioEngine.pauseAll();
+    setPlayingState(false);
     // stop all renderers
     renderers.forEach((r) => { r.stop(); r.renderOnce && r.renderOnce(); });
     stopStaticTicker(true); // freeze playhead at current position
   });
   ui.onStopAll(() => {
     audioEngine.stopAll();
+    setPlayingState(false);
     // draw initial frame after reset
     renderers.forEach((r) => { r.updateSize && r.updateSize(); r.renderOnce && r.renderOnce(); });
     // reset static overview playhead to 0
@@ -114,6 +125,21 @@ onReady(async () => {
       try { audioEngine.setLoopCrossfade(s); } catch {}
     }
   });
+
+  // Random crossfade configuration (Issue #12)
+  ui.onRandomCrossfadeToggle((enabled) => {
+    console.log('[UI] random crossfade toggle', { enabled });
+    if (!enabled && typeof audioEngine.setRandomLoopGlobalConfig === 'function') {
+      try { audioEngine.setRandomLoopGlobalConfig({ enabled: false }); } catch {}
+    }
+  });
+  ui.onRandomCrossfadeConfigChange((config) => {
+    console.log('[UI] random crossfade config changed', config);
+    if (typeof audioEngine.setRandomLoopGlobalConfig === 'function') {
+      try { audioEngine.setRandomLoopGlobalConfig(config); } catch {}
+    }
+  });
+
   ui.onMasterVolumeChange((value) => audioEngine.setMasterVolume(value));
   ui.onTrackVolumeChange((trackId, value) => audioEngine.setTrackVolume(trackId, value));
 

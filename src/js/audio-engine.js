@@ -247,4 +247,21 @@ export class AudioEngine {
     const s = Math.max(0, Number(seconds) || 0);
     console.log('[AudioEngine] setLoopCrossfade (HTML engine stub; no-op)', { seconds: s });
   }
+
+  // Random loop stubs (no-op for HTML engine)
+  setRandomLoopGlobalConfig(config) {
+    console.log('[AudioEngine] setRandomLoopGlobalConfig (HTML engine stub; no-op)', config);
+  }
+
+  setRandomLoopConfig(trackId, config) {
+    console.log('[AudioEngine] setRandomLoopConfig (HTML engine stub; no-op)', { trackId, config });
+  }
+
+  disableRandomLoop(trackId) {
+    console.log('[AudioEngine] disableRandomLoop (HTML engine stub; no-op)', { trackId });
+  }
+
+  getRandomLoopState(trackId) {
+    return null;
+  }
 }

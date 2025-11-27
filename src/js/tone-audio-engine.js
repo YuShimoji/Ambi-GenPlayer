@@ -1,6 +1,6 @@
 // tone-audio-engine.js
-// Tone.js based audio engine (skeleton for Issue #11: crossfade loop)
-
+// Tone.js based audio engine (Issue #11 crossfade, Issue #12 random loop)
+//
 // This module lazy-loads Tone.js from CDN only when instantiated.
 // It mirrors the public API of the Html AudioEngine:
 // - loadTrack(url, trackId)
@@ -11,8 +11,64 @@
 // - setTrackVolume(trackId, value)
 // - setMasterVolume(value)
 
+const DEFAULT_RANDOM_LOOP_CONFIG = Object.freeze({
+  enabled: false,
+  startMin: 0,
+  startMax: 0,
+  lengthMin: 1,
+  lengthMax: 4,
+  mode: 'perLoop',
+  intervalSeconds: 8,
+  seed: null,
+});
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function rng() {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function createRng(seed) {
+  let normalized;
+  if (seed == null || seed === '' || Number.isNaN(seed)) {
+    normalized = Math.floor(Math.random() * 0xffffffff) >>> 0;
+  } else {
+    normalized = Math.abs(Math.floor(seed)) % 0xffffffff;
+  }
+  if (!normalized) normalized = 1;
+  return mulberry32(normalized);
+}
+
+function clamp(val, min, max) {
+  return Math.min(max, Math.max(min, val));
+}
+
+function normalizeRandomConfig(cfg = {}) {
+  const base = { ...DEFAULT_RANDOM_LOOP_CONFIG };
+  const merged = { ...base, ...(cfg || {}) };
+  merged.startMin = Math.max(0, Number(merged.startMin) || 0);
+  merged.startMax = Math.max(merged.startMin, Number(merged.startMax) || merged.startMin);
+  merged.lengthMin = Math.max(0.05, Number(merged.lengthMin) || base.lengthMin);
+  merged.lengthMax = Math.max(merged.lengthMin, Number(merged.lengthMax) || merged.lengthMin);
+  merged.intervalSeconds = Math.max(1, Number(merged.intervalSeconds) || base.intervalSeconds);
+  merged.mode = merged.mode === 'interval' ? 'interval' : 'perLoop';
+  if (merged.seed == null || merged.seed === '') merged.seed = null;
+  return merged;
+}
+
+function pickRandom(rng, min, max) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return min;
+  const span = Math.max(0, max - min);
+  if (span <= 0) return min;
+  return min + rng() * span;
+}
+
 export class ToneAudioEngine {
-  constructor({ loopCrossfade = 0.05, useGrain = true } = {}) {
+  constructor({ loopCrossfade = 0.05, useGrain = false, randomLoopConfig = DEFAULT_RANDOM_LOOP_CONFIG } = {}) {
     this._Tone = null;
     this._ready = this._loadTone();
     this.loopCrossfade = loopCrossfade; // seconds (for Grain overlap)
@@ -20,6 +76,8 @@ export class ToneAudioEngine {
 
     this.tracks = new Map(); // id -> grain: { mode:'grain', player, gain, isLoaded } | dual: { mode:'dual', players:{a,b}, gain, isLoaded, loopStart, loopEnd, scheduler:null, active:'a'|'b' }
     this.isPlaying = false;
+    this.randomLoopGlobal = normalizeRandomConfig(randomLoopConfig);
+    console.log('[ToneAudioEngine] initialized', { useGrain: this.useGrain, loopCrossfade: this.loopCrossfade, randomLoop: this.randomLoopGlobal });
   }
 
   get context() {
@@ -110,6 +168,8 @@ export class ToneAudioEngine {
 
   async playAll({ reset = false } = {}) {
     await this._ready;
+    try { await this._Tone.Tone.start(); } catch {}
+    try { this._Tone.Tone.getContext().resume(); } catch {}
     const startOps = [];
     this.tracks.forEach((t) => {
       if (t?.mode === 'grain') {
@@ -222,6 +282,94 @@ export class ToneAudioEngine {
     // Future: maintain our own clock on start/stop and mod by loopEnd-start.
     return 0;
   }
+
+  // ===== Random Loop Configuration =====
+  setRandomLoopGlobalConfig(config) {
+    this.randomLoopGlobal = normalizeRandomConfig(config);
+    console.log('[ToneAudioEngine] setRandomLoopGlobalConfig', this.randomLoopGlobal);
+    // Apply to all existing tracks that don't have their own config
+    this.tracks.forEach((t, trackId) => {
+      if (!t.randomLoop?.hasOwnConfig) {
+        this._applyRandomConfig(trackId, this.randomLoopGlobal);
+      }
+    });
+  }
+
+  setRandomLoopConfig(trackId, config) {
+    const t = this.tracks.get(trackId);
+    if (!t) return;
+    const normalized = normalizeRandomConfig(config);
+    t.randomLoop = {
+      ...t.randomLoop,
+      hasOwnConfig: true,
+      config: normalized,
+      enabled: normalized.enabled,
+      rng: createRng(normalized.seed),
+    };
+    console.log('[ToneAudioEngine] setRandomLoopConfig', { trackId, config: normalized });
+    // If playing, reschedule with new random params
+    if (this.isPlaying && t.mode === 'dual') {
+      this._dualStart(t, { reset: false });
+    }
+  }
+
+  disableRandomLoop(trackId) {
+    const t = this.tracks.get(trackId);
+    if (!t) return;
+    if (t.randomLoop) {
+      t.randomLoop.enabled = false;
+    }
+    console.log('[ToneAudioEngine] disableRandomLoop', { trackId });
+    // Reschedule with fixed loop
+    if (this.isPlaying && t.mode === 'dual') {
+      this._dualStart(t, { reset: false });
+    }
+  }
+
+  getRandomLoopState(trackId) {
+    const t = this.tracks.get(trackId);
+    if (!t || !t.randomLoop) return null;
+    return {
+      enabled: t.randomLoop.enabled,
+      config: t.randomLoop.config,
+      currentLoopStart: t.loopStart,
+      currentLoopEnd: t.loopEnd,
+    };
+  }
+
+  _applyRandomConfig(trackId, config) {
+    const t = this.tracks.get(trackId);
+    if (!t) return;
+    const normalized = normalizeRandomConfig(config);
+    t.randomLoop = {
+      hasOwnConfig: false,
+      config: normalized,
+      enabled: normalized.enabled,
+      rng: createRng(normalized.seed),
+    };
+  }
+
+  _generateRandomLoopParams(t) {
+    if (!t.randomLoop?.enabled || !t.randomLoop?.config) {
+      return { loopStart: t.loopStart ?? 0, loopEnd: t.loopEnd ?? 0 };
+    }
+    const cfg = t.randomLoop.config;
+    const rng = t.randomLoop.rng || Math.random;
+    const bufDur = t.players?.a?.buffer?.duration || 10;
+    
+    // Pick random start within range, clamped to buffer
+    const startMin = clamp(cfg.startMin, 0, bufDur);
+    const startMax = clamp(cfg.startMax, startMin, bufDur);
+    const loopStart = pickRandom(rng, startMin, startMax);
+    
+    // Pick random length, ensure it's at least 2x crossfade and fits in buffer
+    const minLen = Math.max(cfg.lengthMin, this.loopCrossfade * 2 + 0.1);
+    const maxLen = Math.min(cfg.lengthMax, bufDur - loopStart);
+    const loopLen = Math.max(minLen, pickRandom(rng, minLen, Math.max(minLen, maxLen)));
+    const loopEnd = Math.min(bufDur, loopStart + loopLen);
+    
+    return { loopStart, loopEnd };
+  }
 }
 
 // ===== Dual Player Scheduling Helpers =====
@@ -234,12 +382,22 @@ ToneAudioEngine.prototype._dualStart = function(t, { reset = true } = {}) {
   // stop any currently scheduled playback
   this._dualStop(t);
 
-  const start = t.loopStart ?? 0;
-  const durRaw = (t.loopEnd ?? (a.buffer?.duration || 0)) - start;
-  const loopDur = Math.max(0.05, Number.isFinite(durRaw) ? durRaw : 0.05);
+  // Generate loop params (random if enabled, otherwise use fixed)
+  const getLoopParams = () => {
+    if (t.randomLoop?.enabled && t.randomLoop?.config) {
+      return this._generateRandomLoopParams(t);
+    }
+    return {
+      loopStart: t.loopStart ?? 0,
+      loopEnd: t.loopEnd ?? (a.buffer?.duration || 0),
+    };
+  };
+
+  const initialParams = getLoopParams();
+  let start = initialParams.loopStart;
+  let loopDur = Math.max(0.05, initialParams.loopEnd - start);
   let cross = Math.max(0, Number(this.loopCrossfade) || 0);
-  if (cross > loopDur / 2) cross = loopDur / 2 - 0.005; // avoid self-overlap
-  const period = Math.max(loopDur, 2 * (loopDur - cross));
+  if (cross > loopDur / 2) cross = loopDur / 2 - 0.005;
 
   // ensure fades are in place
   if (typeof a.fadeIn === 'number') a.fadeIn = cross;
@@ -251,23 +409,37 @@ ToneAudioEngine.prototype._dualStart = function(t, { reset = true } = {}) {
   // initial events
   try {
     a.start(base, start); a.stop(base + loopDur);
+    const bParams = getLoopParams();
+    const bLoopStart = bParams.loopStart;
+    const bLoopDur = Math.max(0.05, bParams.loopEnd - bLoopStart);
     const bStart = base + (loopDur - cross);
-    b.start(bStart, start); b.stop(bStart + loopDur);
+    b.start(bStart, bLoopStart); b.stop(bStart + bLoopDur);
   } catch {}
 
-  // schedule subsequent events with independent timers
+  // Calculate period based on initial loop
+  const period = Math.max(loopDur, 2 * (loopDur - cross));
+
+  // schedule subsequent events with independent timers (regenerate random params each cycle)
   const scheduleA = (at) => {
     const delayMs = Math.max(0, (at - Tone.now() - 0.01) * 1000);
     t.scheduler.a = setTimeout(() => {
-      try { a.start(at, start); a.stop(at + loopDur); } catch {}
-      scheduleA(at + period);
+      const params = getLoopParams();
+      const ls = params.loopStart;
+      const ld = Math.max(0.05, params.loopEnd - ls);
+      try { a.start(at, ls); a.stop(at + ld); } catch {}
+      const nextPeriod = Math.max(ld, 2 * (ld - cross));
+      scheduleA(at + nextPeriod);
     }, delayMs);
   };
   const scheduleB = (at) => {
     const delayMs = Math.max(0, (at - Tone.now() - 0.01) * 1000);
     t.scheduler.b = setTimeout(() => {
-      try { b.start(at, start); b.stop(at + loopDur); } catch {}
-      scheduleB(at + period);
+      const params = getLoopParams();
+      const ls = params.loopStart;
+      const ld = Math.max(0.05, params.loopEnd - ls);
+      try { b.start(at, ls); b.stop(at + ld); } catch {}
+      const nextPeriod = Math.max(ld, 2 * (ld - cross));
+      scheduleB(at + nextPeriod);
     }, delayMs);
   };
   t.scheduler = { a: null, b: null };

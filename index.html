@@ -3,69 +3,183 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Ambi-GenPlayer | 自動音楽再生Webツール (Phase 1)</title>
+    <title>Ambi-GenPlayer</title>
     <meta name="description" content="複数音源の同時再生と基本コントロールを備えたアンビエント向けWebオーディオプレイヤー" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="icon" href="data:;base64,=">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./src/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
   </head>
-  <body class="bg-gray-900 text-gray-100">
-    <main class="max-w-4xl mx-auto p-6 space-y-8">
-      <header class="space-y-2">
-        <h1 class="text-2xl font-semibold">Ambi-GenPlayer</h1>
-        <p class="text-gray-400">Phase 1 (MVP): 複数トラック再生・音量制御・基本UI</p>
+  <body>
+    <div class="app-container" id="app">
+      <!-- Header -->
+      <header class="app-header">
+        <h1 class="app-title">AMBI-GENPLAYER</h1>
+        <p class="app-subtitle">Ambient Sound Mixer</p>
       </header>
 
-      <section id="controls" class="space-y-6 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
-        <h2 class="text-lg font-medium">再生コントロール</h2>
-        <div class="flex items-center gap-3">
-          <button id="playBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 rounded text-white">再生</button>
-          <button id="pauseBtn" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 rounded text-white">一時停止</button>
-          <button id="stopBtn" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 rounded text-white">停止</button>
+      <!-- Master Controls -->
+      <section class="glass-panel master-controls" id="masterControls">
+        <div class="play-controls">
+          <button id="stopBtn" class="btn-secondary" title="停止">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <rect x="6" y="6" width="12" height="12" rx="1"/>
+            </svg>
+          </button>
+          <button id="playBtn" class="btn-play" title="再生">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M8 5.14v14.72a1 1 0 001.5.86l11-7.36a1 1 0 000-1.72l-11-7.36a1 1 0 00-1.5.86z"/>
+            </svg>
+          </button>
+          <button id="pauseBtn" class="btn-secondary" title="一時停止">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <rect x="6" y="5" width="4" height="14" rx="1"/>
+              <rect x="14" y="5" width="4" height="14" rx="1"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="master-volume">
+          <span class="master-volume-label">Master</span>
+          <input id="masterVolume" type="range" min="0" max="1" step="0.01" value="1" />
+          <output id="masterVolumeValue" class="master-volume-value">100%</output>
         </div>
       </section>
 
-      <section id="master-volume" class="space-y-4 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
-        <h2 class="text-lg font-medium">マスター音量</h2>
-        <div class="flex items-center gap-4">
-          <input id="masterVolume" type="range" min="0" max="1" step="0.01" value="1" class="w-64" />
-          <output id="masterVolumeValue" class="text-sm text-gray-300">1.00</output>
+      <!-- Tracks Section -->
+      <section class="glass-panel tracks-section">
+        <div class="section-header">
+          <h2 class="section-title">Tracks</h2>
+        </div>
+        <div id="trackControls" class="tracks-grid">
+          <!-- Track cards will be dynamically generated here -->
         </div>
       </section>
 
-      <section id="engine-visual" class="space-y-4 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
-        <h2 class="text-lg font-medium">エンジン/表示設定</h2>
-        <div class="flex items-center gap-6 flex-wrap">
-          <label class="flex items-center gap-2 select-none">
-            <input id="waveformMode" type="checkbox" class="accent-emerald-500" />
-            <span class="text-sm text-gray-300">静的波形モード（オーバービュー表示。オフでリアルタイム表示）</span>
-          </label>
-        </div>
-        <div class="flex items-center gap-4">
-          <label class="w-40 text-sm text-gray-300">クロスフェード（ms）</label>
-          <input id="crossfadeMs" type="range" min="0" max="500" step="5" value="50" class="w-64" />
-          <output id="crossfadeMsValue" class="text-sm text-gray-300">50</output>
-          <span class="text-xs text-gray-500">Toneエンジンで有効（?engine=tone）</span>
+      <!-- Drop Zone -->
+      <section class="glass-panel" style="padding: 0; overflow: hidden;">
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-zone-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 4v12m0 0l-4-4m4 4l4-4M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2"/>
+            </svg>
+          </div>
+          <p class="drop-zone-text">音声ファイルをドラッグ＆ドロップ</p>
+          <p class="drop-zone-hint">MP3, WAV, OGG, FLAC など対応</p>
         </div>
       </section>
 
-      <section id="dnd" class="space-y-3 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
-        <h2 class="text-lg font-medium">ドラッグ＆ドロップで音声追加</h2>
-        <div id="dropZone" class="flex items-center justify-center h-28 rounded border border-dashed border-gray-600 bg-gray-900/40 text-gray-400 select-none">
-          ここに音声ファイル（audio/*）をドロップ
+      <!-- Settings -->
+      <section class="glass-panel settings-section">
+        <div class="settings-toggle" id="settingsToggle" role="button" tabindex="0" aria-expanded="false">
+          <span class="settings-toggle-text">Settings</span>
+          <svg class="settings-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
         </div>
-        <p class="text-xs text-gray-500">ドロップしたファイルはローカルでのみ再生されます。ブラウザの自動再生ポリシーにより、初回は再生ボタンのクリックが必要です。</p>
+        <div class="settings-content" id="settingsContent">
+          <div class="settings-grid">
+            <!-- Waveform Mode Toggle -->
+            <div class="setting-row">
+              <span class="setting-label">波形表示モード</span>
+              <div class="setting-control">
+                <label class="toggle-switch">
+                  <input id="waveformMode" type="checkbox" />
+                  <span class="toggle-slider"></span>
+                </label>
+                <span class="text-muted" style="font-size: 0.75rem;">静的オーバービュー</span>
+              </div>
+            </div>
+
+            <!-- Crossfade (Tone Engine) -->
+            <div class="setting-row">
+              <span class="setting-label">クロスフェード</span>
+              <div class="setting-control">
+                <input id="crossfadeMs" type="range" min="0" max="500" step="5" value="50" style="flex: 1;" />
+                <output id="crossfadeMsValue" class="setting-value">50ms</output>
+              </div>
+            </div>
+
+            <!-- Random Crossfade -->
+            <details id="randomCrossfadePanel">
+              <summary>ランダム・クロスフェード</summary>
+              <div>
+                <div class="setting-row mb-4">
+                  <span class="setting-label">有効化</span>
+                  <div class="setting-control">
+                    <label class="toggle-switch">
+                      <input id="randomCrossfadeToggle" type="checkbox" />
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+                <div class="settings-grid" style="grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                  <div>
+                    <label class="setting-label mb-2" style="display: block;">開始位置 最小 (秒)</label>
+                    <input id="randomStartMin" type="number" step="0.1" min="0" value="0" class="input-field" />
+                  </div>
+                  <div>
+                    <label class="setting-label mb-2" style="display: block;">開始位置 最大 (秒)</label>
+                    <input id="randomStartMax" type="number" step="0.1" min="0" value="10" class="input-field" />
+                  </div>
+                  <div>
+                    <label class="setting-label mb-2" style="display: block;">ループ長 最小 (秒)</label>
+                    <input id="randomLengthMin" type="number" step="0.1" min="0.2" value="1.0" class="input-field" />
+                  </div>
+                  <div>
+                    <label class="setting-label mb-2" style="display: block;">ループ長 最大 (秒)</label>
+                    <input id="randomLengthMax" type="number" step="0.1" min="0.3" value="4.0" class="input-field" />
+                  </div>
+                  <div>
+                    <label class="setting-label mb-2" style="display: block;">更新モード</label>
+                    <select id="randomMode" class="input-field">
+                      <option value="perLoop">ループ毎</option>
+                      <option value="interval">インターバル</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="setting-label mb-2" style="display: block;">インターバル (秒)</label>
+                    <input id="randomInterval" type="number" step="0.1" min="1" value="8" class="input-field" />
+                  </div>
+                  <div style="grid-column: span 2;">
+                    <label class="setting-label mb-2" style="display: block;">シード (任意)</label>
+                    <input id="randomSeed" type="number" step="1" class="input-field" placeholder="空欄でランダム" />
+                  </div>
+                </div>
+                <p class="text-muted mt-4" style="font-size: 0.7rem;">Tone.jsエンジン使用時のみ有効（?engine=tone）</p>
+              </div>
+            </details>
+          </div>
+        </div>
       </section>
 
-      <section id="tracks" class="space-y-3 bg-gray-800/60 rounded-lg p-4 border border-gray-700">
-        <h2 class="text-lg font-medium">トラック別音量</h2>
-        <div id="trackControls" class="space-y-3"></div>
-      </section>
-
-      <footer class="text-xs text-gray-500 pt-6 border-t border-gray-800">
+      <!-- Footer -->
+      <footer style="text-align: center; padding: 24px 0; font-size: 0.7rem; color: var(--text-muted);">
         <p>ブラウザの自動再生ポリシーにより、音声再生はユーザー操作後に有効になります。</p>
       </footer>
-    </main>
+    </div>
 
     <script type="module" src="./src/js/main.js"></script>
+    <script>
+      // Settings toggle
+      document.addEventListener('DOMContentLoaded', () => {
+        const toggle = document.getElementById('settingsToggle');
+        const content = document.getElementById('settingsContent');
+        if (toggle && content) {
+          toggle.addEventListener('click', () => {
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', !expanded);
+            content.classList.toggle('open', !expanded);
+          });
+          toggle.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              toggle.click();
+            }
+          });
+        }
+      });
+    </script>
   </body>
 </html>

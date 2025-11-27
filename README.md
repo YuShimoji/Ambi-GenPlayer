@@ -1,30 +1,47 @@
-# Ambi-GenPlayer: 自動音楽再生Webツール
+# Ambi-GenPlayer
 
-将来的に小説ページ等へ埋め込み可能なWebプレイヤーとしても、独立ページとしても動作することを目指す、アンビエント自動再生ツールです。Phase 1 (MVP) では複数トラックの同時再生と基本UIを提供します。
+**Ambient Sound Mixer** — 複数音源の同時再生・ミキシングに対応したモダンなWebオーディオプレイヤー。
 
-## 目的（Phase 1 / MVP）
-- 複数音源の同時再生・ループ
-- マスター音量・トラック別音量の制御
-- 基本的な再生/一時停止UI
-- タグベースの音源管理の基盤
+将来的に小説ページ等への埋め込み（iframe/Widget）にも対応予定です。
 
-## ファイル/ディレクトリ構成
+## 特徴
+
+- **複数トラック同時再生** — ループ再生、個別音量制御
+- **モダンUI** — ダークテーマ、グラスモーフィズム、グリッドレイアウト
+- **ドラッグ＆ドロップ** — ローカル音声ファイルを即座に追加
+- **波形表示** — リアルタイム波形 / 静的オーバービュー切替
+- **Tone.js エンジン** — クロスフェードループ対応（実験的）
+- **タグベース管理** — タグでトラックをグルーピング、一括ロード
+
+## ファイル構成
+
 ```
 Ambi-GenPlayer/
-├─ index.html
+├─ index.html                 # メインHTML（モダンUI）
 ├─ README.md
-├─ docs/
-│  └─ issues/
-│     └─ phase-1-mvp-issues.md
 ├─ assets/
-│  └─ audio/
-│     └─ README.txt  (任意の音源ファイルを配置: sample1.mp3, sample2.mp3 など)
+│  └─ audio/                  # 音源ファイル配置
+├─ docs/
+│  ├─ issues/
+│  │  └─ phase-1-mvp-issues.md
+│  └─ architecture/
+│     ├─ tonejs-adoption-plan.md
+│     ├─ random-crossfade-design.md
+│     └─ automation-and-effects-design.md
 └─ src/
+   ├─ css/
+   │  └─ style.css            # カスタムスタイル
    └─ js/
-      ├─ main.js
-      ├─ audio-engine.js
-      ├─ ui-handler.js
-      └─ tag-library.js
+      ├─ main.js              # エントリポイント
+      ├─ audio-engine.js      # HTMLAudioベースエンジン
+      ├─ tone-audio-engine.js # Tone.jsベースエンジン
+      ├─ engine-factory.js    # エンジン切替ファクトリ
+      ├─ ui-handler.js        # UI制御
+      ├─ tag-library.js       # タグ管理
+      ├─ waveform-renderer.js # リアルタイム波形描画
+      ├─ static-waveform.js   # 静的オーバービュー波形
+      └─ workers/
+         └─ peaks-worker.js   # ピーク計算ワーカー
 ```
 
 ## クイックスタート
@@ -95,7 +112,7 @@ await __loadByTags(['drop', 'ambient'], 'OR', false);
 - 停止: プレイヘッドは先頭に戻ります。
 
 #### 表示切替（トグル）
-`エンジン/表示設定` セクションの「静的波形モード」トグルで、静的オーバービュー/リアルタイム波形を切り替えできます。静的モードではリアルタイム描画を停止し、軽量なプレイヘッド更新のみ行います。
+Settings パネルの「波形表示モード」トグルで、静的オーバービュー/リアルタイム波形を切り替えできます。静的モードではリアルタイム描画を停止し、軽量なプレイヘッド更新のみ行います。
 
 #### 大容量対応
 静的波形のピーク計算は分割バッチで非同期に処理し、進捗バーを表示します（UI応答性を維持）。
@@ -113,18 +130,30 @@ HTTP(S) で配信されている場合は Module Worker（`src/js/workers/peaks-
 - 注意: Tone.js のCDN読み込みの都合上、`file://` では動作しません。`http(s)://` で配信してご確認ください（簡易サーバ例: VSCode Live Server など）。
 
 #### クロスフェード量（Issue #11）
-`エンジン/表示設定` の「クロスフェード（ms）」スライダーで、ループ端のクロスフェード時間を調整できます（Toneエンジン時に有効）。
+Settings パネルの「クロスフェード」スライダーで、ループ端のクロスフェード時間を調整できます（Toneエンジン時に有効）。
 
 補足: `Tone.GrainPlayer` が利用できない環境では、`Tone.Player` を2基交互にスケジュールしてクロスフェードを実現します（2Player重ね方式）。
 
+#### ランダム・クロスフェード（Issue #12, 実験的）
+Settings パネルの「ランダム・クロスフェード」セクションで、ループ位置・長さをランダム化する設定が可能です。Toneエンジン使用時のみ有効。
+
+- 開始位置範囲（Min/Max）
+- ループ長範囲（Min/Max）
+- 更新モード（ループ毎 / インターバル）
+- シード値（再現性のため、省略時はランダム）
+
+有効化すると、ループサイクルごとに新しい開始位置・長さがランダムに選択され、音響テクスチャに自然な揺らぎが生まれます。
+
 ### 設定の保存
 以下の設定は LocalStorage に保存され、次回アクセス時に自動復元されます。
-- 静的波形モードのON/OFF（`waveformMode`）
+- 波形表示モードのON/OFF（`waveformMode`）
 - クロスフェード時間（ms）（`crossfadeMs`）
 
 ## 今後の拡張
-- Tone.js 採用検討と段階的移行計画: `docs/architecture/tonejs-adoption-plan.md`
-- 埋め込み向け: iframe/Widgetとしての最小バンドル提供
-- プリセット/シーン機能（時間帯やタグで自動切替）
-- フェードイン/アウト、クロスフェード
-- プリロード戦略とキャッシュ
+
+詳細は `docs/architecture/` 配下のドキュメントを参照してください。
+
+- **エフェクト拡張** — Filter/Reverb等のエフェクトチェーン（Issue #13, `automation-and-effects-design.md`）
+- **埋め込み向け** — iframe/Widgetとしての最小バンドル提供
+- **プリセット/シーン機能** — 時間帯やタグで自動切替
+- **プリロード戦略とキャッシュ**
